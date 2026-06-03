@@ -1,15 +1,20 @@
 package com.librarymanagement.console;
 
-import com.librarymanagement.entity.Book;
-import com.librarymanagement.entity.BorrowRecord;
-import com.librarymanagement.entity.Member;
-import com.librarymanagement.service.*;
+import java.util.List;
+import java.util.Scanner;
+
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.Scanner;
+import com.librarymanagement.entity.Book;
+import com.librarymanagement.entity.BorrowRecord;
+import com.librarymanagement.entity.Member;
+import com.librarymanagement.service.BookService;
+import com.librarymanagement.service.BorrowService;
+import com.librarymanagement.service.MemberService;
+import com.librarymanagement.service.StorageMode;
+import com.librarymanagement.service.StorageService;
 
 /**
  * ConsoleRunner — Giao diện console.
@@ -43,11 +48,11 @@ public class ConsoleRunner implements CommandLineRunner {
         int choice = 0;
         while (choice != 5) {
             System.out.println("\n=== Library Management (" + storageService.getCurrentMode() + ") ===");
-            System.out.println("1. Manage books");
-            System.out.println("2. Manage members");
-            System.out.println("3. Manage borrowing");
-            System.out.println("4. Change storage format");
-            System.out.println("5. Exit");
+            System.out.println("1. Quản lý sách");
+            System.out.println("2. Quản lý thành viên");
+            System.out.println("3. Quản lý mượn/trả");
+            System.out.println("4. Thay đổi định dạng lưu trữ");
+            System.out.println("5. Thoát");
             choice = readInt(1, 5);
 
             switch (choice) {
@@ -63,13 +68,13 @@ public class ConsoleRunner implements CommandLineRunner {
     // ──────────────────── BOOKS ────────────────────
 
     private void manageBooks() {
-        System.out.println("\n--- Manage Books ---");
-        System.out.println("1. Add book");
-        System.out.println("2. Search book");
-        System.out.println("3. List all books");
-        System.out.println("4. Update book");
-        System.out.println("5. Delete book");
-        System.out.println("6. Back");
+        System.out.println("\n--- Quản lý sách ---");
+        System.out.println("1. Thêm sách");
+        System.out.println("2. Tìm sách");
+        System.out.println("3. Danh sách sách");
+        System.out.println("4. Cập nhật sách");
+        System.out.println("5. Xóa sách");
+        System.out.println("6. Quay lại");
         int choice = readInt(1, 6);
 
         switch (choice) {
@@ -82,46 +87,124 @@ public class ConsoleRunner implements CommandLineRunner {
     }
 
     private void addBook() {
-        System.out.print("Book ID: ");
+        System.out.print("ID: ");
         String id = scanner.nextLine().trim();
-        System.out.print("Title: ");
+        System.out.print("Tiêu đề: ");
         String title = scanner.nextLine().trim();
-        System.out.print("Author: ");
+        System.out.print("Tác giả: ");
         String author = scanner.nextLine().trim();
-        System.out.print("Genre: ");
+        System.out.print("Thể loại: ");
         String genre = scanner.nextLine().trim();
-        System.out.print("Copies: ");
+        System.out.print("Số lượng: ");
         int copies = readInt();
 
         Book book = new Book(id, title, author, genre, copies);
         boolean success = bookService.addBook(book);
-        System.out.println(success ? "Book added successfully!" : "Book ID already exists!");
+        System.out.println(success ? "Sách đã được thêm thành công!" : "ID sách đã tồn tại!");
     }
 
     private void searchBooks() {
-        System.out.print("Search (title/author/genre): ");
+        System.out.print("Tìm kiếm (tiêu đề/tác giả/thể loại): ");
         String query = scanner.nextLine().trim();
         if (query.isEmpty()) {
-            System.out.println("Please enter a search term.");
+            System.out.println("Vui lòng nhập từ khóa tìm kiếm.");
             return;
         }
 
-        // searchBooks(query) đã giới hạn trang đầu, DEFAULT_PAGE_SIZE records
-        List<Book> results = bookService.searchBooks(query);
-        if (results.isEmpty()) {
-            System.out.println("No books found matching: " + query);
+        // ── Kiểm tra có kết quả không trước khi cho chọn filter ───────────────
+        List<Book> initial = bookService.searchBooks(query);
+        if (initial.isEmpty()) {
+            System.out.println("Không tìm thấy sách nào phù hợp với: \"" + query + "\"");
             return;
         }
-        System.out.println("\n--- Search Results (showing up to " +
-                BookService.DEFAULT_PAGE_SIZE + " results) ---");
-        TablePrinter.printBooks(results);
+
+        // ── Bước 1: Lọc theo Genre ────────────────────────────────────────────
+        String selectedGenre = chooseGenreFilter(query);
+        if (selectedGenre == null) return; // user bấm Exit
+
+        // ── Bước 2: Lọc theo Availability ────────────────────────────────────
+        java.util.Optional<Boolean> availFilter = chooseAvailabilityFilterOpt();
+        if (availFilter == null) return; // user bấm Exit
+
+        // ── Hiện kết quả cuối sau cả 2 bước filter ───────────────────────────
+        Boolean avail = availFilter.orElse(null); // empty Optional = không lọc
+        List<Book> results = bookService.searchWithFilters(query, selectedGenre, avail);
+
+        // Build label mô tả filter đã chọn
+        String genreLabel  = (selectedGenre != null) ? "[" + selectedGenre + "]" : "[All genres]";
+        String availLabel  = (avail == null)  ? "[All]"
+                           : (avail)          ? "[Available]" : "[Fully borrowed]";
+
+        System.out.println("\n─────────────────────────────────────────────────────────");
+        System.out.println(" Results for \"" + query + "\"  Genre: " + genreLabel +
+                           "  Availability: " + availLabel);
+        System.out.println("─────────────────────────────────────────────────────────");
+
+        if (results.isEmpty()) {
+            System.out.println(" Không tìm thấy sách nào phù hợp.");
+        } else {
+            TablePrinter.printBooks(results);
+        }
     }
+
+    /**
+     * Hiện menu chọn genre.
+     * @return genre được chọn, hoặc "" nếu không lọc, hoặc null nếu Exit
+     */
+    private String chooseGenreFilter(String query) {
+        List<String> genres = bookService.getGenresFromSearch(query);
+
+        System.out.println("\n┌─ Bước 1 trên 2: Lọc theo Thể loại───────────────────────┐");
+        if (genres.isEmpty()) {
+            System.out.println("│  (Không có thể loại nào phù hợp)                       │");
+            System.out.println("└─────────────────────────────────────────────────────────┘");
+            return ""; // không có genre → bỏ qua bước này
+        }
+
+        for (int i = 0; i < genres.size(); i++) {
+            System.out.printf("│  %2d. %-51s│%n", i + 1, genres.get(i));
+        }
+        System.out.printf("│  %2d. %-51s│%n", genres.size() + 1, "Không lọc)");
+        System.out.printf("│  %2d. %-51s│%n", genres.size() + 2, "Thoát");
+        System.out.println("└─────────────────────────────────────────────────────────┘");
+        System.out.print("Choose: ");
+
+        int choice = readInt(1, genres.size() + 2);
+        if (choice == genres.size() + 2) return null;            // Exit
+        if (choice == genres.size() + 1) return "";              // No filter
+        return genres.get(choice - 1);                           // Genre cụ thể
+    }
+
+    /**
+     * Hiện menu chọn availability.
+     * @return Optional.of(true) = còn sách, Optional.of(false) = hết sách,
+     *         Optional.empty() = không lọc, null = Exit
+     */
+    private java.util.Optional<Boolean> chooseAvailabilityFilterOpt() {
+        System.out.println("\n┌─ Bước 2 trên 2: Lọc theo Tình trạng  ──────────────────┐");
+        System.out.println("│   1. Còn                                               │");
+        System.out.println("│   2. Đã mượn hết                                       │");
+        System.out.println("│   3. Không lọc                                         │");
+        System.out.println("│   4. Thoát                                             │");
+        System.out.println("└────────────────────────────────────────────────────────┘");
+        System.out.print("Choose: ");
+
+        int choice = readInt(1, 4);
+        return switch (choice) {
+            case 1 -> java.util.Optional.of(true);
+            case 2 -> java.util.Optional.of(false);
+            case 3 -> java.util.Optional.empty();
+            default -> null; // Exit
+        };
+    }
+
+
 
     private void listBooks() {
         // Chỉ lấy trang đầu — không dump toàn bộ bảng ra terminal
         Page<Book> page = bookService.getFirstPage();
         if (page.isEmpty()) {
-            System.out.println("No books found.");
+            System.out.println("Không tìm thấy sách nào.");
             return;
         }
         System.out.println("\n--- Books (page 1/" + page.getTotalPages() +
@@ -133,15 +216,15 @@ public class ConsoleRunner implements CommandLineRunner {
     }
 
     private void updateBook() {
-        System.out.print("Book ID to update: ");
+        System.out.print("Id sách cần cập nhật: ");
         String id = scanner.nextLine().trim();
-        System.out.print("New Title: ");
+        System.out.print("Cập nhật tiêu đề: ");
         String title = scanner.nextLine().trim();
-        System.out.print("New Author: ");
+        System.out.print("Cập nhật tác giả: ");
         String author = scanner.nextLine().trim();
-        System.out.print("New Genre: ");
+        System.out.print("Cập nhật thể loại: ");
         String genre = scanner.nextLine().trim();
-        System.out.print("New Copies: ");
+        System.out.print("Cập nhật số lượng bản sao: ");
         int copies = readInt();
 
         boolean success = bookService.updateBook(id, title, author, genre, copies);
@@ -149,7 +232,7 @@ public class ConsoleRunner implements CommandLineRunner {
     }
 
     private void deleteBook() {
-        System.out.print("Book ID to delete: ");
+        System.out.print("Id sách cần xóa: ");
         String id = scanner.nextLine().trim();
         boolean success = bookService.deleteBook(id);
         System.out.println(success ? "Book deleted successfully!" : "Book not found!");
@@ -158,12 +241,12 @@ public class ConsoleRunner implements CommandLineRunner {
     // ──────────────────── MEMBERS ────────────────────
 
     private void manageMembers() {
-        System.out.println("\n--- Manage Members ---");
-        System.out.println("1. Add member");
-        System.out.println("2. List all members");
-        System.out.println("3. Update member");
-        System.out.println("4. Delete member");
-        System.out.println("5. Back");
+        System.out.println("\n--- Quản lý thành viên ---");
+        System.out.println("1. Thêm thành viên");
+        System.out.println("2. Danh sách thành viên");
+        System.out.println("3. Cập nhật thành viên");
+        System.out.println("4. Xóa thành viên");
+        System.out.println("5. Quay lại");
         int choice = readInt(1, 5);
 
         switch (choice) {
@@ -186,16 +269,16 @@ public class ConsoleRunner implements CommandLineRunner {
 
         Member member = new Member(id, name, email, phone);
         boolean success = memberService.addMember(member);
-        System.out.println(success ? "Member added successfully!" : "Member ID already exists!");
+        System.out.println(success ? "Thành viên đã được thêm thành công!" : "ID thành viên đã tồn tại!");
     }
 
     private void listMembers() {
         Page<Member> page = memberService.getFirstPage();
         if (page.isEmpty()) {
-            System.out.println("No members found.");
+            System.out.println("Không tìm thấy thành viên nào.");
             return;
         }
-        System.out.println("\n--- Members (page 1/" + page.getTotalPages() +
+        System.out.println("\n--- Danh sách thành viên (Trang 1/" + page.getTotalPages() +
                 ", total: " + page.getTotalElements() + ") ---");
         TablePrinter.printMembers(page.getContent());
         if (page.hasNext()) {
@@ -214,24 +297,24 @@ public class ConsoleRunner implements CommandLineRunner {
         String phone = scanner.nextLine().trim();
 
         boolean success = memberService.updateMember(id, name, email, phone);
-        System.out.println(success ? "Member updated successfully!" : "Member not found!");
+        System.out.println(success ? "Thành viên đã được cập nhật thành công!" : "Thành viên không tồn tại!");
     }
 
     private void deleteMember() {
-        System.out.print("Member ID to delete: ");
+        System.out.print("ID thành viên cần xóa: ");
         String id = scanner.nextLine().trim();
         boolean success = memberService.deleteMember(id);
-        System.out.println(success ? "Member deleted successfully!" : "Member not found!");
+        System.out.println(success ? "Thành viên đã được xóa thành công!" : "Thành viên không tồn tại!");
     }
 
     // ──────────────────── BORROWING ────────────────────
 
     private void manageBorrowing() {
-        System.out.println("\n--- Manage Borrowing ---");
-        System.out.println("1. Borrow book");
-        System.out.println("2. Return book");
-        System.out.println("3. List all borrow records");
-        System.out.println("4. Back");
+        System.out.println("\n--- Quản lý mượn sách ---");
+        System.out.println("1. Mượn sách");
+        System.out.println("2. Trả sách");
+        System.out.println("3. Xem tất cả các bản ghi mượn");
+        System.out.println("4. Quay lại");
         int choice = readInt(1, 4);
 
         switch (choice) {
@@ -242,17 +325,17 @@ public class ConsoleRunner implements CommandLineRunner {
     }
 
     private void borrowBook() {
-        System.out.print("Member ID: ");
+        System.out.print("Id thành viên: ");
         String memberId = scanner.nextLine().trim();
-        System.out.print("Book ID: ");
+        System.out.print("Id sách: ");
         String bookId = scanner.nextLine().trim();
         System.out.println(borrowService.borrowBook(memberId, bookId));
     }
 
     private void returnBook() {
-        System.out.print("Member ID: ");
+        System.out.print("Id thành viên: ");
         String memberId = scanner.nextLine().trim();
-        System.out.print("Book ID: ");
+        System.out.print("Id sách: ");
         String bookId = scanner.nextLine().trim();
         System.out.println(borrowService.returnBook(memberId, bookId));
     }
@@ -260,10 +343,10 @@ public class ConsoleRunner implements CommandLineRunner {
     private void listBorrowRecords() {
         Page<BorrowRecord> page = borrowService.getFirstPage();
         if (page.isEmpty()) {
-            System.out.println("No borrow records found.");
+            System.out.println("Không tìm thấy bản ghi mượn nào.");
             return;
         }
-        System.out.println("\n--- Borrow Records (page 1/" + page.getTotalPages() +
+        System.out.println("\n--- Bản ghi mượn (Trang 1/" + page.getTotalPages() +
                 ", total: " + page.getTotalElements() + ") ---");
         TablePrinter.printBorrowRecords(page.getContent());
         if (page.hasNext()) {
@@ -274,12 +357,12 @@ public class ConsoleRunner implements CommandLineRunner {
     // ──────────────────── STORAGE ────────────────────
 
     private void chooseStorage() {
-        System.out.println("\n--- Change Storage Format ---");
+        System.out.println("\n--- Chọn định dạng lưu trữ ---");
         System.out.println("1. DATABASE (PostgreSQL)");
         System.out.println("2. MEMORY");
         System.out.println("3. TXT");
         System.out.println("4. EXCEL");
-        System.out.println("5. Back");
+        System.out.println("5. Quay lại");
         int choice = readInt(1, 5);
 
         StorageMode mode = switch (choice) {
@@ -292,7 +375,7 @@ public class ConsoleRunner implements CommandLineRunner {
 
         if (mode != null) {
             storageService.switchMode(mode);
-            System.out.println("Storage mode changed to: " + mode);
+            System.out.println("Đã chuyển đổi định dạng lưu trữ sang: " + mode);
         }
     }
 
@@ -303,7 +386,7 @@ public class ConsoleRunner implements CommandLineRunner {
             try {
                 return Integer.parseInt(scanner.nextLine().trim());
             } catch (NumberFormatException e) {
-                System.out.print("Invalid number. Try again: ");
+                System.out.print("Số không hợp lệ. Vui lòng thử lại: ");
             }
         }
     }
@@ -312,7 +395,7 @@ public class ConsoleRunner implements CommandLineRunner {
         while (true) {
             int value = readInt();
             if (value >= min && value <= max) return value;
-            System.out.print("Please enter between " + min + " and " + max + ": ");
+            System.out.print("Vui lòng nhập số giữa " + min + " và " + max + ": ");
         }
     }
 }

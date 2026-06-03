@@ -15,7 +15,7 @@ import java.util.Optional;
 @Service
 public class BookService {
 
-    /** Kích thước trang mặc định — đủ nhỏ để RAM an toàn, đủ lớn để UX tốt. */
+    /** Kích thước trang mặc định. */
     public static final int DEFAULT_PAGE_SIZE = 20;
 
     private final BookRepository bookRepository;
@@ -26,51 +26,34 @@ public class BookService {
         this.storageService = storageService;
     }
 
-    // ── Phân trang — dùng cho REST API ───────────────────────────────────────
+    // ── Phân trang — REST API ─────────────────────────────────────────────────
 
-    /**
-     * Lấy danh sách sách CÓ PHÂN TRANG — an toàn với mọi số lượng bản ghi.
-     *
-     * @param page trang hiện tại (0-indexed)
-     * @param size số bản ghi mỗi trang (tối đa 100 để bảo vệ server)
-     * @param sort tên cột sắp xếp (id | title | author | genre | copies)
-     * @param asc  true = tăng dần, false = giảm dần
-     */
     public Page<Book> getAllBooks(int page, int size, String sort, boolean asc) {
-        size = Math.min(size, 100); // hard cap — không cho client kéo quá 100 record/request
+        size = Math.min(size, 100);
         Sort.Direction dir = asc ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(dir, sort));
         return bookRepository.findAll(pageable);
     }
 
-    /**
-     * Shorthand với default sort theo id tăng dần.
-     */
     public Page<Book> getAllBooks(int page, int size) {
         return getAllBooks(page, size, "id", true);
     }
 
-    // ── Console helper — lấy trang đầu để hiển thị ───────────────────────────
+    // ── Console helpers ───────────────────────────────────────────────────────
 
-    /**
-     * Dùng cho ConsoleRunner: chỉ lấy trang đầu tiên (DEFAULT_PAGE_SIZE records).
-     * Console không nên hiển thị hàng triệu dòng ra terminal.
-     */
+    /** Trang đầu tiên — dùng cho Console list. */
     public Page<Book> getFirstPage() {
         return getAllBooks(0, DEFAULT_PAGE_SIZE, "id", true);
     }
 
     // ── Export — CHỈ dùng nội bộ (StorageService) ────────────────────────────
 
-    /**
-     * ⚠️ INTERNAL USE ONLY — chỉ gọi từ StorageService khi export TXT/Excel.
-     * Không expose ra Controller hay Console.
-     */
+    /** ⚠️ INTERNAL USE ONLY */
     public List<Book> findAllForExport() {
         return bookRepository.findAll(Sort.by("id"));
     }
 
-    // ── CRUD ─────────────────────────────────────────────────────────────────
+    // ── CRUD ──────────────────────────────────────────────────────────────────
 
     @Transactional
     public boolean addBook(Book book) {
@@ -106,10 +89,10 @@ public class BookService {
         return true;
     }
 
-    // ── Tìm kiếm CÓ PHÂN TRANG ───────────────────────────────────────────────
+    // ── Tìm kiếm ─────────────────────────────────────────────────────────────
 
     /**
-     * Tìm kiếm sách CÓ PHÂN TRANG — dùng cho REST API.
+     * Tìm kiếm theo từ khóa — CÓ PHÂN TRANG (REST API).
      */
     public Page<Book> searchBooks(String query, int page, int size) {
         if (query == null || query.isBlank()) return Page.empty();
@@ -119,7 +102,7 @@ public class BookService {
     }
 
     /**
-     * Shorthand: lấy trang đầu với DEFAULT_PAGE_SIZE kết quả — dùng cho Console.
+     * Tìm kiếm theo từ khóa — trả List trang đầu (Console).
      */
     public List<Book> searchBooks(String query) {
         if (query == null || query.isBlank()) return List.of();
@@ -127,5 +110,28 @@ public class BookService {
                 query.trim(),
                 PageRequest.of(0, DEFAULT_PAGE_SIZE, Sort.by("title"))
         ).getContent();
+    }
+
+    /**
+     * Tìm kiếm với bộ lọc kết hợp — trả List trang đầu (Console).
+     *
+     * @param query         từ khóa tìm kiếm
+     * @param genre         genre cần lọc, null = không lọc genre
+     * @param availableOnly true = còn sách, false = hết sách, null = không lọc availability
+     */
+    public List<Book> searchWithFilters(String query, String genre, Boolean availableOnly) {
+        if (query == null || query.isBlank()) return List.of();
+        Pageable pageable = PageRequest.of(0, DEFAULT_PAGE_SIZE, Sort.by("title"));
+        String g = (genre != null && !genre.isBlank()) ? genre.trim() : null;
+        return bookRepository.searchWithFilters(query.trim(), g, availableOnly, pageable).getContent();
+    }
+
+    /**
+     * Lấy danh sách genre phân biệt có trong kết quả search.
+     * Dùng để build menu filter genre cho Console.
+     */
+    public List<String> getGenresFromSearch(String query) {
+        if (query == null || query.isBlank()) return List.of();
+        return bookRepository.findDistinctGenresByQuery(query.trim());
     }
 }
