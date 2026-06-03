@@ -1,16 +1,19 @@
 package com.librarymanagement.service;
 
-import com.librarymanagement.entity.Book;
-import com.librarymanagement.repository.BookRepository;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Optional;
+import com.librarymanagement.entity.Book;
+import com.librarymanagement.repository.BookRepository;
+import com.librarymanagement.specification.BookSpecifications;
 
 @Service
 public class BookService {
@@ -98,7 +101,8 @@ public class BookService {
         if (query == null || query.isBlank()) return Page.empty();
         size = Math.min(size, 100);
         Pageable pageable = PageRequest.of(page, size, Sort.by("title"));
-        return bookRepository.search(query.trim(), pageable);
+        Specification<Book> spec = Specification.where(BookSpecifications.fullTextContains(query.trim()));
+        return bookRepository.findAll(spec, pageable);
     }
 
     /**
@@ -106,10 +110,8 @@ public class BookService {
      */
     public List<Book> searchBooks(String query) {
         if (query == null || query.isBlank()) return List.of();
-        return bookRepository.search(
-                query.trim(),
-                PageRequest.of(0, DEFAULT_PAGE_SIZE, Sort.by("title"))
-        ).getContent();
+        Specification<Book> spec = Specification.where(BookSpecifications.fullTextContains(query.trim()));
+        return bookRepository.findAll(spec, Sort.by("title")).stream().limit(DEFAULT_PAGE_SIZE).toList();
     }
 
     /**
@@ -121,9 +123,10 @@ public class BookService {
      */
     public List<Book> searchWithFilters(String query, String genre, Boolean availableOnly) {
         if (query == null || query.isBlank()) return List.of();
-        Pageable pageable = PageRequest.of(0, DEFAULT_PAGE_SIZE, Sort.by("title"));
-        String g = (genre != null && !genre.isBlank()) ? genre.trim() : null;
-        return bookRepository.searchWithFilters(query.trim(), g, availableOnly, pageable).getContent();
+        Specification<Book> spec = Specification.where(BookSpecifications.fullTextContains(query.trim()))
+                .and(BookSpecifications.genreEqualsIgnoreCase(genre))
+                .and(BookSpecifications.availabilityEquals(availableOnly));
+        return bookRepository.findAll(spec, Sort.by("title")).stream().limit(DEFAULT_PAGE_SIZE).toList();
     }
 
     /**
@@ -132,6 +135,14 @@ public class BookService {
      */
     public List<String> getGenresFromSearch(String query) {
         if (query == null || query.isBlank()) return List.of();
-        return bookRepository.findDistinctGenresByQuery(query.trim());
+        Specification<Book> spec = Specification.where(BookSpecifications.fullTextContains(query.trim()));
+        return bookRepository.findAll(spec, Sort.by("genre"))
+                .stream()
+                .map(Book::getGenre)
+                .filter(g -> g != null && !g.isBlank())
+                .map(String::strip)
+                .distinct()
+                .sorted()
+                .toList();
     }
 }
