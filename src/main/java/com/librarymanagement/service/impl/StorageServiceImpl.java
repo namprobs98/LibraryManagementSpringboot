@@ -1,4 +1,23 @@
-package com.librarymanagement.service;
+package com.librarymanagement.service.impl;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.librarymanagement.entity.Book;
 import com.librarymanagement.entity.BorrowRecord;
@@ -6,24 +25,12 @@ import com.librarymanagement.entity.Member;
 import com.librarymanagement.repository.BookRepository;
 import com.librarymanagement.repository.BorrowRecordRepository;
 import com.librarymanagement.repository.MemberRepository;
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import com.librarymanagement.service.LibrarySnapshot;
+import com.librarymanagement.service.StorageMode;
+import com.librarymanagement.service.services.StorageService;
 
-import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
-import java.util.ArrayList;
-import java.util.List;
-
-/**
- * StorageService - Quản lý việc lưu trữ dữ liệu theo nhiều chế độ:
- * DATABASE (JPA), MEMORY, TXT, EXCEL.
- * Logic TXT và Excel giữ nguyên từ project Java thuần.
- */
 @Service
-public class StorageService {
+public class StorageServiceImpl implements StorageService {
 
     private static final String SEP = "|";
     private static final Path TXT_PATH = Paths.get("library_data_java.txt");
@@ -35,18 +42,20 @@ public class StorageService {
     private final MemberRepository memberRepository;
     private final BorrowRecordRepository borrowRecordRepository;
 
-    public StorageService(BookRepository bookRepository,
-                          MemberRepository memberRepository,
-                          BorrowRecordRepository borrowRecordRepository) {
+    public StorageServiceImpl(BookRepository bookRepository,
+                              MemberRepository memberRepository,
+                              BorrowRecordRepository borrowRecordRepository) {
         this.bookRepository = bookRepository;
         this.memberRepository = memberRepository;
         this.borrowRecordRepository = borrowRecordRepository;
     }
 
+    @Override
     public StorageMode getCurrentMode() {
         return currentMode;
     }
 
+    @Override
     @Transactional
     public void switchMode(StorageMode mode) {
         if (mode == StorageMode.DATABASE) {
@@ -66,7 +75,6 @@ public class StorageService {
             currentMode = StorageMode.TXT;
             return;
         }
-        // EXCEL mode
         if (Files.exists(XLSX_PATH)) {
             loadFromExcel();
         } else {
@@ -75,6 +83,7 @@ public class StorageService {
         currentMode = StorageMode.EXCEL;
     }
 
+    @Override
     public void persistCurrentIfNeeded() {
         LibrarySnapshot snapshot = buildSnapshot();
         if (currentMode == StorageMode.TXT) {
@@ -84,6 +93,7 @@ public class StorageService {
         }
     }
 
+    @Override
     public LibrarySnapshot buildSnapshot() {
         return new LibrarySnapshot(
                 bookRepository.findAll(),
@@ -91,10 +101,6 @@ public class StorageService {
                 borrowRecordRepository.findAll()
         );
     }
-
-    // ============================================================
-    // TXT Storage (giữ nguyên logic từ project Java gốc)
-    // ============================================================
 
     private void saveToTxt(LibrarySnapshot snapshot) {
         Path temp = Paths.get(TXT_PATH + ".tmp");
@@ -120,6 +126,7 @@ public class StorageService {
         }
     }
 
+    @Override
     @Transactional
     public void loadFromTxt() {
         List<Book> books = new ArrayList<>();
@@ -168,14 +175,9 @@ public class StorageService {
         }
     }
 
-    // ============================================================
-    // Excel Storage (giữ nguyên logic từ project Java gốc)
-    // ============================================================
-
     private void saveToExcel(LibrarySnapshot snapshot) {
         Path temp = Paths.get(XLSX_PATH + ".tmp");
         try (Workbook workbook = new XSSFWorkbook()) {
-            // Books sheet
             Sheet bookSheet = workbook.createSheet("books");
             writeBookHeader(bookSheet.createRow(0));
             int row = 1;
@@ -189,7 +191,6 @@ public class StorageService {
                 r.createCell(5).setCellValue(b.getBorrowed());
             }
 
-            // Members sheet
             Sheet memberSheet = workbook.createSheet("members");
             Row mh = memberSheet.createRow(0);
             mh.createCell(0).setCellValue("id");
@@ -205,7 +206,6 @@ public class StorageService {
                 r.createCell(3).setCellValue(m.getPhone());
             }
 
-            // Borrow Records sheet
             Sheet borrowSheet = workbook.createSheet("borrow_records");
             Row bh = borrowSheet.createRow(0);
             bh.createCell(0).setCellValue("id");
@@ -232,6 +232,7 @@ public class StorageService {
         }
     }
 
+    @Override
     @Transactional
     public void loadFromExcel() {
         List<Book> books = new ArrayList<>();
@@ -252,10 +253,6 @@ public class StorageService {
             throw new RuntimeException("Cannot load EXCEL: " + e.getMessage(), e);
         }
     }
-
-    // ============================================================
-    // Helper methods (giữ nguyên từ project Java gốc)
-    // ============================================================
 
     private static void writeBookHeader(Row header) {
         header.createCell(0).setCellValue("id");

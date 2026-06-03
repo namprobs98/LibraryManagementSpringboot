@@ -1,10 +1,10 @@
 package com.librarymanagement.console;
 
+import java.util.List;
+
 import com.librarymanagement.entity.Book;
 import com.librarymanagement.entity.BorrowRecord;
 import com.librarymanagement.entity.Member;
-
-import java.util.List;
 
 /**
  * TablePrinter - In dữ liệu dạng bảng ra console.
@@ -67,7 +67,7 @@ public class TablePrinter {
 
     private static void printTableFooter(int[] widths, int totalRecords) {
         printLine(widths);
-        System.out.println("Total: " + totalRecords + " records");
+        System.out.println("Tổng: " + totalRecords + " bản ghi.");
     }
 
     private static String[] getBookRow(Object obj) {

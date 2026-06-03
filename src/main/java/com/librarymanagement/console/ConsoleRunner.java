@@ -10,11 +10,11 @@ import org.springframework.stereotype.Component;
 import com.librarymanagement.entity.Book;
 import com.librarymanagement.entity.BorrowRecord;
 import com.librarymanagement.entity.Member;
-import com.librarymanagement.service.BookService;
-import com.librarymanagement.service.BorrowService;
-import com.librarymanagement.service.MemberService;
 import com.librarymanagement.service.StorageMode;
-import com.librarymanagement.service.StorageService;
+import com.librarymanagement.service.services.BookService;
+import com.librarymanagement.service.services.BorrowService;
+import com.librarymanagement.service.services.MemberService;
+import com.librarymanagement.service.services.StorageService;
 
 /**
  * ConsoleRunner — Giao diện console.
@@ -208,7 +208,7 @@ public class ConsoleRunner implements CommandLineRunner {
             return;
         }
         System.out.println("\n--- Books (page 1/" + page.getTotalPages() +
-                ", total: " + page.getTotalElements() + ") ---");
+                ", Tổng: " + page.getTotalElements() + ") ---");
         TablePrinter.printBooks(page.getContent());
         if (page.hasNext()) {
             System.out.println("[Hint] Use GET /api/books?page=1&size=20 to see more.");
@@ -279,7 +279,7 @@ public class ConsoleRunner implements CommandLineRunner {
             return;
         }
         System.out.println("\n--- Danh sách thành viên (Trang 1/" + page.getTotalPages() +
-                ", total: " + page.getTotalElements() + ") ---");
+                ", Tổng: " + page.getTotalElements() + ") ---");
         TablePrinter.printMembers(page.getContent());
         if (page.hasNext()) {
             System.out.println("[Hint] Use GET /api/members?page=1&size=20 to see more.");
@@ -347,7 +347,7 @@ public class ConsoleRunner implements CommandLineRunner {
             return;
         }
         System.out.println("\n--- Bản ghi mượn (Trang 1/" + page.getTotalPages() +
-                ", total: " + page.getTotalElements() + ") ---");
+                ", Tổng: " + page.getTotalElements() + ") ---");
         TablePrinter.printBorrowRecords(page.getContent());
         if (page.hasNext()) {
             System.out.println("[Hint] Use GET /api/borrow?page=1&size=20 to see more.");

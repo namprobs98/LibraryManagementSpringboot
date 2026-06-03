@@ -1,4 +1,4 @@
-package com.librarymanagement.service;
+package com.librarymanagement.service.impl;
 
 import java.util.List;
 import java.util.Optional;
@@ -13,10 +13,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.librarymanagement.entity.Book;
 import com.librarymanagement.repository.BookRepository;
+import com.librarymanagement.service.services.BookService;
+import com.librarymanagement.service.services.StorageService;
 import com.librarymanagement.specification.BookSpecifications;
 
 @Service
-public class BookService {
+public class BookServiceImpl implements BookService {
 
     /** Kích thước trang mặc định. */
     public static final int DEFAULT_PAGE_SIZE = 20;
@@ -24,13 +26,14 @@ public class BookService {
     private final BookRepository bookRepository;
     private final StorageService storageService;
 
-    public BookService(BookRepository bookRepository, StorageService storageService) {
+    public BookServiceImpl(BookRepository bookRepository, StorageService storageService) {
         this.bookRepository = bookRepository;
         this.storageService = storageService;
     }
 
     // ── Phân trang — REST API ─────────────────────────────────────────────────
 
+    @Override
     public Page<Book> getAllBooks(int page, int size, String sort, boolean asc) {
         size = Math.min(size, 100);
         Sort.Direction dir = asc ? Sort.Direction.ASC : Sort.Direction.DESC;
@@ -38,6 +41,7 @@ public class BookService {
         return bookRepository.findAll(pageable);
     }
 
+    @Override
     public Page<Book> getAllBooks(int page, int size) {
         return getAllBooks(page, size, "id", true);
     }
@@ -45,6 +49,7 @@ public class BookService {
     // ── Console helpers ───────────────────────────────────────────────────────
 
     /** Trang đầu tiên — dùng cho Console list. */
+    @Override
     public Page<Book> getFirstPage() {
         return getAllBooks(0, DEFAULT_PAGE_SIZE, "id", true);
     }
@@ -52,12 +57,14 @@ public class BookService {
     // ── Export — CHỈ dùng nội bộ (StorageService) ────────────────────────────
 
     /** ⚠️ INTERNAL USE ONLY */
+    @Override
     public List<Book> findAllForExport() {
         return bookRepository.findAll(Sort.by("id"));
     }
 
     // ── CRUD ──────────────────────────────────────────────────────────────────
 
+    @Override
     @Transactional
     public boolean addBook(Book book) {
         if (bookRepository.existsById(book.getId())) return false;
@@ -66,10 +73,12 @@ public class BookService {
         return true;
     }
 
+    @Override
     public Optional<Book> getBookById(String id) {
         return bookRepository.findById(id);
     }
 
+    @Override
     @Transactional
     public boolean updateBook(String id, String title, String author, String genre, int copies) {
         Optional<Book> found = bookRepository.findById(id);
@@ -84,6 +93,7 @@ public class BookService {
         return true;
     }
 
+    @Override
     @Transactional
     public boolean deleteBook(String id) {
         if (!bookRepository.existsById(id)) return false;
@@ -94,9 +104,7 @@ public class BookService {
 
     // ── Tìm kiếm ─────────────────────────────────────────────────────────────
 
-    /**
-     * Tìm kiếm theo từ khóa — CÓ PHÂN TRANG (REST API).
-     */
+    @Override
     public Page<Book> searchBooks(String query, int page, int size) {
         if (query == null || query.isBlank()) return Page.empty();
         size = Math.min(size, 100);
@@ -105,22 +113,14 @@ public class BookService {
         return bookRepository.findAll(spec, pageable);
     }
 
-    /**
-     * Tìm kiếm theo từ khóa — trả List trang đầu (Console).
-     */
+    @Override
     public List<Book> searchBooks(String query) {
         if (query == null || query.isBlank()) return List.of();
         Specification<Book> spec = Specification.where(BookSpecifications.fullTextContains(query.trim()));
         return bookRepository.findAll(spec, Sort.by("title")).stream().limit(DEFAULT_PAGE_SIZE).toList();
     }
 
-    /**
-     * Tìm kiếm với bộ lọc kết hợp — trả List trang đầu (Console).
-     *
-     * @param query         từ khóa tìm kiếm
-     * @param genre         genre cần lọc, null = không lọc genre
-     * @param availableOnly true = còn sách, false = hết sách, null = không lọc availability
-     */
+    @Override
     public List<Book> searchWithFilters(String query, String genre, Boolean availableOnly) {
         if (query == null || query.isBlank()) return List.of();
         Specification<Book> spec = Specification.where(BookSpecifications.fullTextContains(query.trim()))
@@ -129,10 +129,7 @@ public class BookService {
         return bookRepository.findAll(spec, Sort.by("title")).stream().limit(DEFAULT_PAGE_SIZE).toList();
     }
 
-    /**
-     * Lấy danh sách genre phân biệt có trong kết quả search.
-     * Dùng để build menu filter genre cho Console.
-     */
+    @Override
     public List<String> getGenresFromSearch(String query) {
         if (query == null || query.isBlank()) return List.of();
         Specification<Book> spec = Specification.where(BookSpecifications.fullTextContains(query.trim()));
@@ -146,3 +143,4 @@ public class BookService {
                 .toList();
     }
 }
+

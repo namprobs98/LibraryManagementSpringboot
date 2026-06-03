@@ -1,15 +1,22 @@
 package com.librarymanagement.controller;
 
+import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.librarymanagement.dto.ApiResponse;
 import com.librarymanagement.dto.BorrowRequest;
 import com.librarymanagement.dto.PageResponse;
 import com.librarymanagement.entity.BorrowRecord;
-import com.librarymanagement.service.BorrowService;
+import com.librarymanagement.service.services.BorrowService;
+
 import jakarta.validation.Valid;
-import org.springframework.data.domain.Page;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 
 /**
  * BorrowController — REST API cho quản lý mượn / trả sách.
